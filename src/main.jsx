@@ -6,7 +6,14 @@ import App from './App.jsx'
 import './index.css'
 
 const qc = new QueryClient({
-  defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: true, staleTime: 10_000 } },
+  defaultOptions: {
+    queries: {
+      retry: false,
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
+      staleTime: 60 * 1000,
+    },
+  },
 })
 
 ReactDOM.createRoot(document.getElementById('root')).render(

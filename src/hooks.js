@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query'
 import { api, getToken, setToken, clearToken } from './api.js'
 
@@ -9,11 +10,19 @@ export function useMe(enabled = true) {
     queryFn: () => api('/me'),
     enabled,
     retry: 1,
+    staleTime: 60 * 1000,
+    refetchOnWindowFocus: false,
   })
 }
 
 export function useStats() {
-  return useQuery({ queryKey: ['stats'], queryFn: () => api('/stats'), retry: 1 })
+  return useQuery({
+    queryKey: ['stats'],
+    queryFn: () => api('/stats'),
+    retry: 1,
+    staleTime: 30 * 1000,
+    refetchOnWindowFocus: false,
+  })
 }
 
 export function useGuests(params = {}) {
@@ -25,6 +34,8 @@ export function useGuests(params = {}) {
     queryKey: ['guests', params],
     queryFn: () => api(`/guests?${qs}`),
     keepPreviousData: true,
+    staleTime: 20 * 1000,
+    refetchOnWindowFocus: false,
   })
 }
 
@@ -42,8 +53,20 @@ export function useGuestsInfinite(search = '', rsvp = '', perPage = 20) {
   })
 }
 
-export function useWishes(page = 1) {
-  return useQuery({ queryKey: ['wishes', page], queryFn: () => api(`/wishes?page=${page}`), keepPreviousData: true })
+export function useWishes({ page = 1, perPage = 10, status = 'semua' } = {}) {
+  const qs = new URLSearchParams({
+    page: String(page),
+    per_page: String(perPage),
+  })
+  if (status && status !== 'semua') qs.set('status', status)
+
+  return useQuery({
+    queryKey: ['wishes', page, perPage, status],
+    queryFn: () => api(`/wishes?${qs}`),
+    keepPreviousData: true,
+    staleTime: 15 * 1000,
+    refetchOnWindowFocus: false,
+  })
 }
 
 export function useInvalidate() {
@@ -65,4 +88,28 @@ export function useMutationApiNoInvalidate(fn, opts = {}) {
 
 export function useLogout() {
   return { logout: () => { clearToken(); window.location.assign('/login') } }
+}
+
+export function useBodyScrollLock(isLocked) {
+  useEffect(() => {
+    if (!isLocked) return
+
+    const originalBodyOverflow = document.body.style.overflow
+    const originalHtmlOverflow = document.documentElement.style.overflow
+    const originalPaddingRight = document.body.style.paddingRight
+
+    const scrollBarWidth = window.innerWidth - document.documentElement.clientWidth
+    if (scrollBarWidth > 0) {
+      document.body.style.paddingRight = `${scrollBarWidth}px`
+    }
+
+    document.body.style.overflow = 'hidden'
+    document.documentElement.style.overflow = 'hidden'
+
+    return () => {
+      document.body.style.overflow = originalBodyOverflow
+      document.documentElement.style.overflow = originalHtmlOverflow
+      document.body.style.paddingRight = originalPaddingRight
+    }
+  }, [isLocked])
 }

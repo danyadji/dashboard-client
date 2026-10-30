@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useRef, useCallback } from 'react'
 import {
   useMe,
   useGuests,
   useStats,
   useMutationApi,
+  useBodyScrollLock,
   api,
 } from '../hooks.js'
 import CaptionCards from '../components/CaptionCards.jsx'
@@ -26,20 +27,24 @@ export default function Kirim() {
   const [captionId, setCaptionId] = useState(getSavedCaptionId())
   const [editorOpen, setEditorOpen] = useState(false)
   const [recipientSheetOpen, setRecipientSheetOpen] = useState(false)
-  const [toastMsg, setToastMsg] = useState('')
 
+  useBodyScrollLock(recipientSheetOpen || editorOpen)
   // Fetch all guests for recipient picker
   const guestsQuery = useGuests({ per_page: 200 })
   const allGuests = guestsQuery.data?.items || []
 
   const s = stats.data || {}
-  const totalTamu = s.total_tamu ?? allGuests.length
-  const terkirimCount = s.terkirim ?? 0
+  const totalTamu = s.total_tamu ?? s.total_guests ?? allGuests.length
+  const terkirimCount = s.terkirim ?? s.sent_count ?? 0
   const progressPercent = totalTamu > 0 ? (terkirimCount / totalTamu) * 100 : 0
 
   const customTemplate = me.data?.template_pesan || ''
   const mempelai = decodeHtml(me.data?.undangan?.mempelai || '')
-  const linkUmum = me.data?.undangan?.link_umum || ''
+  const slug = me.data?.undangan?.slug
+  const baseInvitationUrl = (import.meta.env.VITE_INVITATION_BASE_URL || '').replace(/\/+$/, '')
+  const linkUmum = slug && baseInvitationUrl
+    ? `${baseInvitationUrl}/${slug}`
+    : (me.data?.undangan?.link_umum || me.data?.undangan?.link || '')
 
   // Selected guest entity
   const selected = useMemo(() => {
@@ -59,10 +64,14 @@ export default function Kirim() {
     ['guests', 'stats']
   )
 
-  const showToast = (msg) => {
+  const [toastMsg, setToastMsg] = useState('')
+  const toastTimer = useRef(null)
+
+  const showToast = useCallback((msg) => {
+    clearTimeout(toastTimer.current)
     setToastMsg(msg)
-    setTimeout(() => setToastMsg(''), 2200)
-  }
+    toastTimer.current = setTimeout(() => setToastMsg(''), 2200)
+  }, [])
 
   const penerimaNama =
     mode === 'pilih_tamu' ? decodeHtml(selected?.nama || '') : customNama.trim()
@@ -70,9 +79,13 @@ export default function Kirim() {
   const hasPhone = !!penerimaWa
   const isAlreadySent = mode === 'pilih_tamu' && selected?.kirim_status === 'terkirim'
 
+  const guestLink = (selected && slug && baseInvitationUrl)
+    ? `${baseInvitationUrl}/${slug}?to=${encodeURIComponent(selected.nama || '')}`
+    : (selected?.link_personal || '')
+
   const linkPersonal =
     mode === 'pilih_tamu' && selected
-      ? selected.link_personal
+      ? guestLink
       : penerimaNama
       ? `${linkUmum}?to=${encodeURIComponent(penerimaNama)}`
       : ''

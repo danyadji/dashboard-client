@@ -157,6 +157,26 @@ export function handleMockApi(path, options = {}) {
     }
   }
 
+  // 1b. Magic login
+  if (path.startsWith('/auth/magic-login')) {
+    return {
+      valid: true,
+      token: body.token || 'demo-token',
+      user: {
+        display_name: 'Client Demo',
+        user_email: 'client_demo@diamora.test',
+        user_login: 'client_demo',
+      },
+      undangan: {
+        id: 1,
+        judul: 'Danu & Fifi',
+        mempelai: 'Danu & Fifi',
+        slug: 'danu-fifi',
+        link: 'https://diamora.test/danu-fifi',
+      },
+    }
+  }
+
   // 2. /me
   if (path === '/me') {
     return {

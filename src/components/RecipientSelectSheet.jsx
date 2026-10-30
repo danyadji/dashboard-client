@@ -56,13 +56,13 @@ export default function RecipientSelectSheet({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-text-primary/45 backdrop-blur-[2px]">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-text-primary/45 backdrop-blur-[2px] overscroll-contain">
       {/* Backdrop */}
       <div className="absolute inset-0" onClick={onClose} />
 
       {/* Sheet Panel */}
       <div
-        className="relative w-full max-w-[430px] rounded-t-[28px] bg-surface p-5 shadow-2xl h-[90vh] flex flex-col overflow-hidden animate-in slide-in-from-bottom duration-250"
+        className="relative w-full max-w-[430px] rounded-t-[28px] bg-surface p-5 shadow-2xl h-[90vh] flex flex-col overflow-hidden overscroll-contain animate-in slide-in-from-bottom duration-250"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Grabber */}
@@ -167,7 +167,7 @@ export default function RecipientSelectSheet({
         </div>
 
         {/* Guest List Area (Scrollable) */}
-        <div className="flex-1 overflow-y-auto divide-y divide-surface-muted -mx-5 px-5">
+        <div className="flex-1 overflow-y-auto overscroll-contain divide-y divide-surface-muted -mx-5 px-5">
           {filteredGuests.length === 0 ? (
             <div className="py-12 text-center text-xs text-text-tertiary">
               Tidak ada tamu yang cocok.

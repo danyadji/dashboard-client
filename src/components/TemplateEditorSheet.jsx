@@ -33,11 +33,11 @@ export default function TemplateEditorSheet({ onClose }) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-text-primary/45 backdrop-blur-[2px]"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-text-primary/45 backdrop-blur-[2px] overscroll-contain"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-[430px] rounded-t-[28px] bg-white p-5 pb-8 shadow-2xl animate-in slide-in-from-bottom duration-250"
+        className="w-full max-w-[430px] rounded-t-[28px] bg-white p-5 pb-8 shadow-2xl overscroll-contain animate-in slide-in-from-bottom duration-250"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="w-10 h-1 bg-border rounded-full mx-auto -mt-1 mb-4" />

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import { useMe, useMutationApiNoInvalidate, useLogout, api } from '../hooks.js'
 import { ADMIN_WA } from '../lib/kontak.js'
 import { decodeHtml } from '../lib/decode.js'
@@ -34,11 +34,13 @@ export default function Pengaturan() {
   const [showBantuanSheet, setShowBantuanSheet] = useState(false)
   const [pwFeedback, setPwFeedback] = useState(null)
   const [toastMsg, setToastMsg] = useState('')
+  const toastTimer = useRef(null)
 
-  const showToast = (msg) => {
+  const showToast = useCallback((msg) => {
+    clearTimeout(toastTimer.current)
     setToastMsg(msg)
-    setTimeout(() => setToastMsg(''), 2500)
-  }
+    toastTimer.current = setTimeout(() => setToastMsg(''), 2500)
+  }, [])
 
   // Password mutation handler
   const savePw = useMutationApiNoInvalidate(

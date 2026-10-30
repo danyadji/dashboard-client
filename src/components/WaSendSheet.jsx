@@ -25,8 +25,8 @@ export default function WaSendSheet({ guest, customTemplate, mempelai, onOpened,
   }
 
   return (
-    <div className="fixed inset-0 z-30 flex items-end justify-center bg-black/40" onClick={onClose}>
-      <div className="w-full max-w-lg rounded-t-2xl bg-white p-5 pb-8" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-30 flex items-end justify-center bg-black/40 overscroll-contain" onClick={onClose}>
+      <div className="w-full max-w-lg rounded-t-2xl bg-white p-5 pb-8 overscroll-contain" onClick={(e) => e.stopPropagation()}>
         <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-stone-200" />
         <h3 className="text-base font-semibold">Kirim WhatsApp</h3>
         <p className="mb-3 text-xs text-stone-500">Kepada: {guest.nama}</p>

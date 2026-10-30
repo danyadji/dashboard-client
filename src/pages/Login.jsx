@@ -16,6 +16,36 @@ export default function Login() {
   const shouldReduceMotion = useReducedMotion()
 
   useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search)
+    const magicToken = urlParams.get('token')
+
+    if (magicToken) {
+      setLoading(true)
+      api('/auth/magic-login', {
+        method: 'POST',
+        body: { token: magicToken },
+      })
+        .then((res) => {
+          clearToken()
+          setToken(res.token || magicToken)
+          const clientName =
+            res.user?.display_name ||
+            res.user?.name ||
+            res.client_name ||
+            res.undangan?.mempelai ||
+            'Mempelai'
+          setSuccessName(clientName)
+          setTimeout(() => {
+            nav('/dashboard', { replace: true })
+          }, 800)
+        })
+        .catch((err) => {
+          setLoading(false)
+          setError(err.message || 'Link login otomatis tidak valid atau sudah kedaluwarsa.')
+        })
+      return
+    }
+
     if (getToken()) {
       nav('/dashboard', { replace: true })
     }
@@ -63,15 +93,8 @@ export default function Login() {
     }
   }
 
-  function handleDemoLogin() {
-    clearToken()
-    setToken('demo-token')
-    setSuccessName('Client Demo')
-    setTimeout(() => {
-      nav('/dashboard', { replace: true })
-    }, 600)
-  }
-
+  /* Fungsi handleDemoLogin dihapus */
+  
   // Animation variants
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -463,54 +486,42 @@ export default function Login() {
               </motion.div>
             )}
 
-            {/* Submit Button */}
-            <div className="pt-2 space-y-2.5">
-              <button
-                type="submit"
-                disabled={loading || !!successName}
-                className="w-full h-[52px] rounded-button bg-primary text-white font-semibold text-[15px] shadow-[0_2px_8px_rgba(169,121,90,0.18)] hover:bg-primary-dark active:scale-[0.98] transition-all duration-150 disabled:opacity-75 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                {loading ? (
-                  <>
-                    <svg
-                      className="animate-spin h-5 w-5 text-white"
-                      xmlns="http://www.w3.org/2000/svg"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                    >
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="3"
-                      />
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
-                      />
-                    </svg>
-                    <span>Memproses...</span>
-                  </>
-                ) : (
-                  'Masuk'
-                )}
-              </button>
-
-              <button
-                type="button"
-                onClick={handleDemoLogin}
-                className="w-full h-11 rounded-button bg-primary-tint/60 hover:bg-primary-tint text-primary font-semibold text-xs border border-primary/20 flex items-center justify-center gap-1.5 active:scale-[0.98] transition-all"
-              >
-                <svg className="w-4 h-4 fill-primary" viewBox="0 0 20 20">
-                  <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
-                  <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" />
-                </svg>
-                <span>Coba Mode Demo (1-Klik Masuk)</span>
-              </button>
-            </div>
+              {/* Submit Button */}
+              <div className="pt-2">
+                <button
+                  type="submit"
+                  disabled={loading || !!successName}
+                  className="w-full h-[52px] rounded-button bg-primary text-white font-semibold text-[15px] shadow-[0_2px_8px_rgba(169,121,90,0.18)] hover:bg-primary-dark active:scale-[0.98] transition-all duration-150 disabled:opacity-75 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {loading ? (
+                    <>
+                      <svg
+                        className="animate-spin h-5 w-5 text-white"
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="3"
+                        />
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+                        />
+                      </svg>
+                      <span>Memproses...</span>
+                    </>
+                  ) : (
+                    'Masuk'
+                  )}
+                </button>
+              </div>
           </motion.form>
         </div>
 

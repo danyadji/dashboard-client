@@ -25,7 +25,12 @@ export default function GuestDetailSheet({
   const pax = guest.pax || 1
   const kategori = decodeHtml(guest.kategori || 'Lainnya')
   const phone = guest.no_wa || ''
-  const link = guest.link_personal || ''
+  const baseInvitationUrl = (import.meta.env.VITE_INVITATION_BASE_URL || '').replace(/\/+$/, '')
+  const link =
+    guest.link_personal ||
+    (guest.nama && baseInvitationUrl && guest.undangan_slug
+      ? `${baseInvitationUrl}/${guest.undangan_slug}?to=${encodeURIComponent(guest.nama)}`
+      : '')
   const isSent = guest.kirim_status === 'terkirim'
 
   let rsvpBadgeText = 'Belum respon'
@@ -52,13 +57,13 @@ export default function GuestDetailSheet({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-text-primary/45 backdrop-blur-[2px] transition-opacity">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-text-primary/45 backdrop-blur-[2px] transition-opacity overscroll-contain">
       {/* Backdrop tap to close */}
       <div className="absolute inset-0" onClick={onClose} />
 
       {/* Sheet Panel */}
       <div
-        className="relative w-full max-w-[430px] rounded-t-[28px] bg-surface p-5 shadow-2xl max-h-[90vh] flex flex-col overflow-y-auto animate-in slide-in-from-bottom duration-250"
+        className="relative w-full max-w-[430px] rounded-t-[28px] bg-surface p-5 shadow-2xl max-h-[90vh] flex flex-col overflow-y-auto overscroll-contain animate-in slide-in-from-bottom duration-250"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Grabber Handle */}

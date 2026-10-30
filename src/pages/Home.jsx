@@ -1,7 +1,55 @@
-import { useState, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { useMe, useStats, useGuests } from '../hooks.js'
 import { decodeHtml } from '../lib/decode.js'
+import diamoraLogo from '../assets/logo/logo-2.png'
+
+const INDO_MONTHS = {
+  januari: 0, jan: 0,
+  februari: 1, feb: 1,
+  maret: 2, mar: 2,
+  april: 3, apr: 3,
+  mei: 4, may: 4,
+  juni: 5, jun: 5,
+  juli: 6, jul: 6,
+  agustus: 7, ags: 7, agu: 7, aug: 7,
+  september: 8, sep: 8,
+  oktober: 9, okt: 9, oct: 9,
+  november: 10, nov: 10,
+  desember: 11, des: 11, dec: 11,
+}
+
+function parseEventDate(raw) {
+  if (!raw || typeof raw !== 'string') return null
+  const cleaned = raw.trim()
+  if (!cleaned) return null
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(cleaned)) {
+    const d = new Date(`${cleaned}T08:00:00`)
+    if (!Number.isNaN(d.getTime())) return d
+  }
+
+  const iso = cleaned.replace(' ', 'T')
+  const dIso = new Date(iso)
+  if (!Number.isNaN(dIso.getTime())) {
+    return dIso
+  }
+
+  const normalized = cleaned.replace(/\*/g, '0')
+  const match = normalized.match(/(\d{1,2})\s+([a-zA-Z]+)\s+(\d{4})/)
+  if (match) {
+    const day = parseInt(match[1], 10)
+    const monthKey = match[2].toLowerCase()
+    const year = parseInt(match[3], 10)
+    const month = INDO_MONTHS[monthKey]
+    if (month !== undefined && !Number.isNaN(day) && !Number.isNaN(year)) {
+      return new Date(year, month, day, 8, 0, 0)
+    }
+  }
+
+  return null
+}
 
 export default function Home() {
   const nav = useNavigate()
@@ -9,47 +57,88 @@ export default function Home() {
   const stats = useStats()
   const guestsQuery = useGuests({ per_page: 5 })
   const [toastMsg, setToastMsg] = useState('')
+  const toastTimer = useRef(null)
 
-  const showToast = (msg) => {
+  const showToast = useCallback((msg) => {
+    clearTimeout(toastTimer.current)
     setToastMsg(msg)
-    setTimeout(() => setToastMsg(''), 2000)
-  }
+    toastTimer.current = setTimeout(() => setToastMsg(''), 2000)
+  }, [])
 
   const u = me.data?.undangan
   const s = stats.data || {}
   const guests = guestsQuery.data?.guests || guestsQuery.data?.items || []
 
-  const linkUmum = u?.link_umum || ''
+  const baseInvitationUrl = (import.meta.env.VITE_INVITATION_BASE_URL || '').replace(/\/+$/, '')
+  const linkUmum = u?.slug && baseInvitationUrl
+    ? `${baseInvitationUrl}/${u.slug}`
+    : (u?.link_umum || u?.link || '')
   const mempelaiNama = decodeHtml(u?.mempelai || u?.judul || 'Danu & Fifi')
 
-  // Format date helper
+  const slug = u?.slug
+  const invitationDetailQuery = useQuery({
+    queryKey: ['invitation-detail', slug],
+    queryFn: async () => {
+      if (!slug) return null
+      const base = (import.meta.env.VITE_WP_API_URL || 'http://localhost/diamora/wordpress').replace(/\/+$/, '')
+      const res = await fetch(`${base}/wp-json/wp/v2/undangan?slug=${encodeURIComponent(slug)}`)
+      if (!res.ok) return null
+      const list = await res.json()
+      return Array.isArray(list) && list.length > 0 ? list[0] : null
+    },
+    enabled: Boolean(slug && !u?.event_date),
+    staleTime: 5 * 60 * 1000,
+  })
+
+  const postAcf = invitationDetailQuery.data?.acf || {}
+  const rawDate =
+    u?.event_date ||
+    u?.eventDate ||
+    u?.akad_date ||
+    u?.resepsi_date ||
+    postAcf.event_date ||
+    postAcf.akad_date ||
+    postAcf.resepsi_date ||
+    ''
+
+  const parsedTargetDate = useMemo(() => parseEventDate(rawDate), [rawDate])
+
   const eventDateFormatted = useMemo(() => {
-    if (!u?.event_date) return null
-    const target = new Date(u.event_date.replace(' ', 'T'))
-    if (Number.isNaN(target.getTime())) return null
-    return target.toLocaleDateString('id-ID', {
+    if (!parsedTargetDate) return null
+    return parsedTargetDate.toLocaleDateString('id-ID', {
       day: 'numeric',
       month: 'short',
       year: 'numeric',
     })
-  }, [u?.event_date])
+  }, [parsedTargetDate])
 
-  // Countdown calculation
+  const [now, setNow] = useState(() => Date.now())
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 60 * 1000)
+    return () => clearInterval(timer)
+  }, [])
+
   const countdownInfo = useMemo(() => {
-    if (!u?.event_date) return { status: 'missing' }
-    const target = new Date(u.event_date.replace(' ', 'T'))
-    if (Number.isNaN(target.getTime())) return { status: 'missing' }
-    const diff = Math.ceil((target - Date.now()) / 86_400_000)
-    if (diff < 0) return { status: 'passed' }
-    return { status: 'active', days: diff }
-  }, [u?.event_date])
+    if (!parsedTargetDate) return { status: 'missing' }
+    const totalMs = parsedTargetDate.getTime() - now
+    if (totalMs <= 0) return { status: 'passed' }
 
-  // RSVP Calculation
-  const totalTamu = s.total_tamu ?? 0
-  const hadir = s.hadir ?? 0
-  const tidakHadir = s.tidak_hadir ?? 0
-  const ragu = s.ragu ?? 0
-  const belumRespon = s.belum_respon ?? Math.max(0, totalTamu - hadir - tidakHadir - ragu)
+    const totalSeconds = Math.floor(totalMs / 1000)
+    const days = Math.floor(totalSeconds / 86400)
+    const hours = Math.floor((totalSeconds % 86400) / 3600)
+
+    return { status: 'active', days, hours }
+  }, [parsedTargetDate, now])
+
+  const rsvpObj = s.rsvp || {}
+  const totalTamu = s.total_tamu ?? s.total_guests ?? guestsQuery.data?.total ?? 0
+  const hadir = s.hadir ?? rsvpObj.hadir ?? 0
+  const tidakHadir = s.tidak_hadir ?? rsvpObj.tidak_hadir ?? 0
+  const ragu = s.ragu ?? rsvpObj.ragu ?? 0
+  const belumRespon = s.belum_respon ?? rsvpObj.belum_respon ?? Math.max(0, totalTamu - hadir - tidakHadir - ragu)
+  const terkirim = s.terkirim ?? s.sent_count ?? 0
+  const ucapan = s.ucapan ?? s.total_wishes ?? 0
   const totalRespon = hadir + tidakHadir + ragu
 
   const totalPercent = totalTamu > 0 ? Math.round((totalRespon / totalTamu) * 100) : 0
@@ -78,10 +167,8 @@ export default function Home() {
     window.open(linkUmum, '_blank')
   }
 
-  // Display URL without protocol for cleaner UI
   const displayUrl = linkUmum ? linkUmum.replace(/^https?:\/\//, '') : 'diamora.com/undangan'
 
-  // Loading skeleton state
   if (me.isLoading || stats.isLoading) {
     return (
       <div className="space-y-4 pt-2 animate-pulse">
@@ -98,43 +185,32 @@ export default function Home() {
 
   return (
     <div className="space-y-4 pb-6 antialiased">
-      {/* Toast notification */}
       {toastMsg && (
         <div className="fixed top-5 left-1/2 -translate-x-1/2 z-50 bg-text-primary text-white text-xs font-medium px-4 py-2 rounded-full shadow-lg transition-all">
           {toastMsg}
         </div>
       )}
 
-      {/* 1. App Bar Header */}
       <header className="flex items-center justify-between pt-1">
-        <div className="flex items-center gap-2">
-          {/* Subtle flower/mandala icon */}
-          <div className="w-7 h-7 rounded-full bg-primary-tint flex items-center justify-center text-primary">
-            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 2C13.1 2 14 2.9 14 4C14 4.7 13.6 5.3 13 5.7V8.1C14.8 8.5 16.3 9.7 17 11.3C18.6 10.6 20.6 11.3 21.4 12.9C22.1 14.5 21.4 16.5 19.8 17.3C19.3 17.5 18.7 17.5 18.2 17.3C17.3 18.9 15.5 20 13.5 20H13V20.3C13.6 20.7 14 21.3 14 22C14 23.1 13.1 24 12 24C10.9 24 10 23.1 10 22C10 21.3 10.4 20.7 11 20.3V20H10.5C8.5 20 6.7 18.9 5.8 17.3C5.3 17.5 4.7 17.5 4.2 17.3C2.6 16.5 1.9 14.5 2.6 12.9C3.4 11.3 5.4 10.6 7 11.3C7.7 9.7 9.2 8.5 11 8.1V5.7C10.4 5.3 10 4.7 10 4C10 2.9 10.9 2 12 2Z" />
-            </svg>
+        <div className="flex items-center gap-2.5">
+          <div className="flex items-center">
+            <img
+              src={diamoraLogo}
+              alt="Diamora"
+              className="h-7 w-auto object-contain max-w-[120px]"
+              onError={(e) => {
+                e.currentTarget.style.display = 'none'
+              }}
+            />
           </div>
           <h1 className="text-[19px] font-bold text-text-primary tracking-tight">Beranda</h1>
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Notification bell icon button */}
-          <button
-            type="button"
-            onClick={() => showToast('Belum ada notifikasi baru')}
-            className="w-9 h-9 rounded-full flex items-center justify-center text-text-primary hover:bg-surface-muted transition-colors relative"
-            aria-label="Notifikasi"
-          >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-            </svg>
-          </button>
-
-          {/* User profile avatar icon */}
           <button
             type="button"
             onClick={() => nav('/pengaturan')}
-            className="w-9 h-9 rounded-full bg-primary-dark text-white flex items-center justify-center text-xs font-bold shadow-sm hover:opacity-95 transition-opacity"
+            className="w-9 h-9 rounded-full bg-primary-dark text-white flex items-center justify-center text-xs font-bold shadow-sm hover:opacity-95 transition-opacity cursor-pointer"
             aria-label="Profil"
           >
             <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
@@ -144,7 +220,6 @@ export default function Home() {
         </div>
       </header>
 
-      {/* 2. Client Greeting & Event Date Pill */}
       <div className="flex items-center justify-between pt-1">
         <div>
           <p className="text-[11px] font-semibold tracking-wider text-text-tertiary uppercase">
@@ -155,7 +230,6 @@ export default function Home() {
           </h2>
         </div>
 
-        {/* Date pill */}
         <div className="flex-shrink-0">
           {eventDateFormatted ? (
             <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white border border-border shadow-[0_1px_4px_rgba(31,29,27,0.03)] text-xs font-medium text-text-primary">
@@ -173,9 +247,7 @@ export default function Home() {
         </div>
       </div>
 
-      {/* 3. Hero Countdown Card */}
       <div className="relative overflow-hidden rounded-[24px] bg-gradient-to-br from-primary to-primary-dark p-5 text-white shadow-[0_6px_20px_rgba(169,121,90,0.18)]">
-        {/* Subtle decorative wedding rings watermark */}
         <svg
           className="absolute -right-3 -top-3 w-32 h-32 pointer-events-none opacity-20"
           viewBox="0 0 100 100"
@@ -185,21 +257,34 @@ export default function Home() {
           <circle cx="65" cy="45" r="28" stroke="white" strokeWidth="4" />
         </svg>
 
-        {/* Top pill badge */}
         <div className="inline-flex items-center rounded-full bg-white/20 backdrop-blur-sm px-3 py-1 text-[11px] font-semibold text-white tracking-wide">
           Menghitung Hari
         </div>
 
-        {/* Big countdown display */}
         <div className="mt-3">
           {countdownInfo.status === 'active' && (
-            <div className="flex items-baseline">
-              <span className="text-[34px] font-bold leading-none tracking-tight">
-                {countdownInfo.days}
-              </span>
-              <span className="text-base font-semibold ml-2 text-white/95">
-                hari lagi
-              </span>
+            <div className="flex items-baseline flex-wrap gap-x-3 gap-y-1">
+              {countdownInfo.days > 0 && (
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-[32px] sm:text-[36px] font-bold leading-none tracking-tight">
+                    {countdownInfo.days}
+                  </span>
+                  <span className="text-[14px] sm:text-base font-semibold text-white/95">
+                    Hari
+                  </span>
+                </div>
+              )}
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-[32px] sm:text-[36px] font-bold leading-none tracking-tight">
+                  {countdownInfo.hours}
+                </span>
+                <span className="text-[14px] sm:text-base font-semibold text-white/95">
+                  Jam
+                </span>
+                <span className="text-[13px] sm:text-[14px] font-medium text-white/85 ml-0.5">
+                  lagi
+                </span>
+              </div>
             </div>
           )}
           {countdownInfo.status === 'passed' && (
@@ -218,7 +303,6 @@ export default function Home() {
         </div>
       </div>
 
-      {/* 4. Link Undangan Umum Card */}
       <div className="rounded-[20px] bg-white border border-border shadow-[0_2px_12px_rgba(31,29,27,0.05)] p-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5 text-[13px] font-semibold text-text-primary">
@@ -232,7 +316,6 @@ export default function Home() {
           </span>
         </div>
 
-        {/* URL Box */}
         <div className="mt-2.5 mb-3 flex items-center justify-between rounded-[14px] bg-surface-muted px-3.5 py-2.5 border border-border/50">
           <span className="text-xs font-medium text-text-primary truncate select-all pr-2">
             {displayUrl}
@@ -250,9 +333,7 @@ export default function Home() {
           </button>
         </div>
 
-        {/* Action Buttons Row */}
         <div className="grid grid-cols-12 gap-2">
-          {/* Bagikan WA */}
           <button
             type="button"
             onClick={shareWa}
@@ -264,7 +345,6 @@ export default function Home() {
             <span>Bagikan WA</span>
           </button>
 
-          {/* Salin */}
           <button
             type="button"
             onClick={copyLink}
@@ -276,7 +356,6 @@ export default function Home() {
             <span>Salin</span>
           </button>
 
-          {/* Lihat */}
           <button
             type="button"
             onClick={openLink}
@@ -290,7 +369,6 @@ export default function Home() {
         </div>
       </div>
 
-      {/* 5. Progres RSVP Card */}
       <div className="rounded-[20px] bg-white border border-border shadow-[0_2px_12px_rgba(31,29,27,0.05)] p-4">
         <div className="flex items-center justify-between">
           <div>
@@ -304,7 +382,6 @@ export default function Home() {
           </span>
         </div>
 
-        {/* Multi-segmented Progress Bar */}
         <div className="h-2.5 w-full rounded-full bg-surface-muted overflow-hidden flex my-3">
           {totalTamu > 0 ? (
             <>
@@ -342,7 +419,6 @@ export default function Home() {
           )}
         </div>
 
-        {/* Legend Row */}
         <div className="flex items-center justify-between text-[11px] text-text-secondary pt-0.5">
           <div className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-success" />
@@ -363,11 +439,8 @@ export default function Home() {
         </div>
       </div>
 
-      {/* 6. Quick Stats Grid */}
       <div className="space-y-3">
-        {/* 2x2 Grid */}
         <div className="grid grid-cols-2 gap-3">
-          {/* Card 1: Tamu Diundang */}
           <Link
             to="/tamu"
             className="rounded-[20px] bg-white border border-border shadow-[0_2px_12px_rgba(31,29,27,0.04)] p-3.5 hover:border-primary/40 transition-all block"
@@ -383,7 +456,6 @@ export default function Home() {
             </div>
           </Link>
 
-          {/* Card 2: Konfirmasi Hadir */}
           <Link
             to="/tamu"
             className="rounded-[20px] bg-white border border-border shadow-[0_2px_12px_rgba(31,29,27,0.04)] p-3.5 hover:border-success/40 transition-all block"
@@ -399,7 +471,6 @@ export default function Home() {
             </p>
           </Link>
 
-          {/* Card 3: Belum Respon */}
           <Link
             to="/tamu"
             className="rounded-[20px] bg-white border border-border shadow-[0_2px_12px_rgba(31,29,27,0.04)] p-3.5 hover:border-warning/40 transition-all block"
@@ -415,7 +486,6 @@ export default function Home() {
             </p>
           </Link>
 
-          {/* Card 4: Tidak Hadir */}
           <Link
             to="/tamu"
             className="rounded-[20px] bg-white border border-border shadow-[0_2px_12px_rgba(31,29,27,0.04)] p-3.5 hover:border-danger/40 transition-all block"
@@ -432,7 +502,6 @@ export default function Home() {
           </Link>
         </div>
 
-        {/* 2 Bottom Pills: Terkirim via WA + Ucapan Masuk */}
         <div className="grid grid-cols-2 gap-3">
           <Link
             to="/kirim"
@@ -441,7 +510,7 @@ export default function Home() {
             <svg className="w-4 h-4 text-primary flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
               <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
             </svg>
-            <span>{s.terkirim ?? 0} Terkirim via WA</span>
+            <span>{terkirim} Terkirim via WA</span>
           </Link>
 
           <Link
@@ -451,12 +520,11 @@ export default function Home() {
             <svg className="w-4 h-4 text-primary flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
               <path strokeLinecap="round" strokeLinejoin="round" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
             </svg>
-            <span>{s.ucapan ?? 0} Ucapan Masuk</span>
+            <span>{ucapan} Ucapan Masuk</span>
           </Link>
         </div>
       </div>
 
-      {/* 7. Primary Action Button */}
       <div>
         <Link
           to="/tamu"
@@ -472,7 +540,6 @@ export default function Home() {
         </Link>
       </div>
 
-      {/* 8. Aktivitas Terbaru Section */}
       <div className="space-y-2.5 pt-1">
         <div className="flex items-center justify-between">
           <h3 className="text-base font-bold text-text-primary">Aktivitas Terbaru</h3>
@@ -484,7 +551,6 @@ export default function Home() {
           </Link>
         </div>
 
-        {/* Activity Rows */}
         <div className="space-y-2">
           {guests.length > 0 ? (
             guests.slice(0, 3).map((g, idx) => {
@@ -541,7 +607,6 @@ export default function Home() {
               )
             })
           ) : (
-            /* Fallback mock activity matching screenshot if no guests yet */
             <>
               <Link
                 to="/tamu"

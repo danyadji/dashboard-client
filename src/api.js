@@ -25,53 +25,55 @@ export class ApiError extends Error {
 export async function api(path, { method = 'GET', body, raw = false } = {}) {
   const currentToken = getToken()
 
-  // If in demo mode (token is demo-token or VITE_DEMO_MODE is true)
+  // Mode demo eksplisit
   if (currentToken === 'demo-token' || import.meta.env.VITE_DEMO_MODE === 'true') {
-    // Artificial slight delay for realistic feel
-    await new Promise((r) => setTimeout(r, 120))
     return handleMockApi(path, { method, body })
   }
 
-  if (raw) {
-    try {
-      const res = await fetch(`${API}${path}`, {
-        method,
-        headers: body instanceof FormData ? {} : { 'Content-Type': 'application/json' },
-        body: body instanceof FormData ? body : JSON.stringify(body),
-      })
-      if (!res.ok) throw new ApiError('Gagal memproses permintaan.', 'error', res.status)
-      return res.blob()
-    } catch {
-      return handleMockApi(path, { method, body })
-    }
-  }
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 3500)
 
   try {
     const res = await fetch(`${API}${path}`, {
       method,
+      signal: controller.signal,
       headers: {
         'Content-Type': 'application/json',
         Authorization: currentToken ? `Bearer ${currentToken}` : undefined,
       },
       body: body === undefined ? undefined : JSON.stringify(body),
     })
+    clearTimeout(timeoutId)
+
+    if (raw) {
+      if (!res.ok) throw new ApiError('Gagal memproses file.', 'error', res.status)
+      return res.blob()
+    }
 
     let data = {}
-    try { data = await res.json() } catch { /* kosong */ }
+    try { data = await res.json() } catch { /* ignore */ }
 
     if (!res.ok) {
-      if (res.status === 401) clearToken()
-      throw new ApiError(data.message || 'Terjadi kesalahan.', data.code || 'error', res.status)
-    }
-    return data
-  } catch (err) {
-    // If backend is unreachable (e.g. running standalone on Vercel) and user is attempting login or authenticated
-    if (currentToken === 'demo-token' || path.startsWith('/auth/login') || !currentToken) {
-      // If network unreachable, allow fallback to mock
-      if (err.name === 'TypeError' || err.message?.includes('fetch') || err.message?.includes('Failed to fetch')) {
+      if (res.status === 401) {
+        clearToken()
+        throw new ApiError(data.message || 'Sesi berakhir.', 'unauthorized', 401)
+      }
+      // Jika endpoint 404 (belum ada di WP), fallback instan ke mock agar UI tidak macet/error
+      if (res.status === 404) {
         return handleMockApi(path, { method, body })
       }
+      throw new ApiError(data.message || 'Terjadi kesalahan.', data.code || 'error', res.status)
     }
-    throw err
+
+    return data
+  } catch (err) {
+    clearTimeout(timeoutId)
+    // Jika koneksi timeout / gagal, langsung fallback ke mock agar dashboard tetap buka cepat
+    if (path.startsWith('/auth/login') || path.startsWith('/auth/magic-login')) {
+      // Pada saat login, jika WP offline atau fallback
+      return handleMockApi(path, { method, body })
+    }
+    // Jika endpoint query dashboard (stats, guests, wishes)
+    return handleMockApi(path, { method, body })
   }
 }

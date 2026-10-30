@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
   useMe,
@@ -7,6 +7,7 @@ import {
   useMutationApi,
   useQueryClient,
   useMutation,
+  useBodyScrollLock,
   api,
 } from '../hooks.js'
 import GuestForm from '../components/GuestForm.jsx'
@@ -29,9 +30,9 @@ export default function Tamu() {
   const [editing, setEditing] = useState(emptyForm)
   const [formError, setFormError] = useState('')
   const [waGuest, setWaGuest] = useState(null)
-  const [toastMsg, setToastMsg] = useState('')
-
   const sentinel = useRef(null)
+
+  useBodyScrollLock(formOpen || Boolean(selectedGuest) || Boolean(waGuest))
 
   // Debounce search input
   useEffect(() => {
@@ -43,9 +44,23 @@ export default function Tamu() {
 
   const guests = useGuestsInfinite(debouncedSearch, rsvpFilter)
 
+  const slug = me.data?.undangan?.slug || ''
+  const baseInvitationUrl = (import.meta.env.VITE_INVITATION_BASE_URL || '').replace(/\/+$/, '')
+
   const items = useMemo(
-    () => (guests.data?.pages || []).flatMap((p) => p.items || []),
-    [guests.data]
+    () =>
+      (guests.data?.pages || [])
+        .flatMap((p) => p.items || [])
+        .map((g) => ({
+          ...g,
+          undangan_slug: g.undangan_slug || slug,
+          link_personal:
+            g.link_personal ||
+            (slug && baseInvitationUrl && g.nama
+              ? `${baseInvitationUrl}/${slug}?to=${encodeURIComponent(g.nama)}`
+              : ''),
+        })),
+    [guests.data, slug, baseInvitationUrl]
   )
 
   // Infinite scroll intersection observer
@@ -96,25 +111,34 @@ export default function Tamu() {
     ['guests-inf', 'guests', 'stats']
   )
 
-  const showToast = (msg) => {
+  const [toastMsg, setToastMsg] = useState('')
+  const toastTimer = useRef(null)
+
+  const showToast = useCallback((msg) => {
+    clearTimeout(toastTimer.current)
     setToastMsg(msg)
-    setTimeout(() => setToastMsg(''), 2000)
-  }
+    toastTimer.current = setTimeout(() => setToastMsg(''), 2000)
+  }, [])
 
   const s = stats.data || {}
-  const totalTamu = s.total_tamu ?? items.length
+  const rsvpObj = s.rsvp || {}
+  const totalTamu = s.total_tamu ?? s.total_guests ?? items.length
   const totalPax = s.total_pax ?? totalTamu
+  const hadir = s.hadir ?? rsvpObj.hadir ?? 0
+  const tidakHadir = s.tidak_hadir ?? rsvpObj.tidak_hadir ?? 0
+  const ragu = s.ragu ?? rsvpObj.ragu ?? 0
+  const belumRespon = s.belum_respon ?? rsvpObj.belum_respon ?? 0
+  const terkirim = s.terkirim ?? s.sent_count ?? 0
   const customTemplate = me.data?.template_pesan || ''
   const mempelai = me.data?.undangan?.mempelai || ''
 
-  // Filter chips with live counts from stats
   const filterChips = [
-    { id: 'semua', label: 'Semua', count: s.total_tamu ?? 0 },
-    { id: 'belum_respon', label: 'Belum respon', count: s.belum_respon ?? 0 },
-    { id: 'hadir', label: 'Hadir', count: s.hadir ?? 0 },
-    { id: 'tidak_hadir', label: 'Tidak hadir', count: s.tidak_hadir ?? 0 },
-    { id: 'ragu', label: 'Ragu', count: s.ragu ?? 0 },
-    { id: 'terkirim', label: 'Terkirim', count: s.terkirim ?? 0 },
+    { id: 'semua', label: 'Semua', count: totalTamu },
+    { id: 'belum_respon', label: 'Belum respon', count: belumRespon },
+    { id: 'hadir', label: 'Hadir', count: hadir },
+    { id: 'tidak_hadir', label: 'Tidak hadir', count: tidakHadir },
+    { id: 'ragu', label: 'Ragu', count: ragu },
+    { id: 'terkirim', label: 'Terkirim', count: terkirim },
   ]
 
   function openAdd() {
@@ -415,11 +439,11 @@ export default function Tamu() {
       {/* 5. Add / Edit Guest Form Bottom Sheet */}
       {formOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-text-primary/45 backdrop-blur-[2px]"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-text-primary/45 backdrop-blur-[2px] overscroll-contain"
           onClick={() => setFormOpen(false)}
         >
           <div
-            className="w-full max-w-[430px] rounded-t-[28px] bg-white p-5 pb-8 shadow-2xl max-h-[92vh] overflow-y-auto animate-in slide-in-from-bottom duration-250"
+            className="w-full max-w-[430px] rounded-t-[28px] bg-white p-5 pb-8 shadow-2xl max-h-[92vh] overflow-y-auto overscroll-contain animate-in slide-in-from-bottom duration-250"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="w-10 h-1 rounded-full bg-border mx-auto -mt-1 mb-4" />

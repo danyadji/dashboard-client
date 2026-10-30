@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 60" fill="none" className="h-8 w-auto">
+  <!-- Diamora Brand Logo Mark -->
+  <g fill="#A9795A">
+    <!-- Diamond monogram icon -->
+    <path d="M20 10 L30 30 L20 50 L10 30 Z" opacity="0.9" />
+    <circle cx="20" cy="30" r="4" fill="#FFFFFF" />
+    <!-- Text wordmark -->
+    <text x="40" y="38" font-family="'Cinzel', 'Playfair Display', serif, sans-serif" font-size="22" font-weight="700" letter-spacing="2" fill="#2B2118">
+      DIAMORA
+    </text>
+  </g>
+</svg>

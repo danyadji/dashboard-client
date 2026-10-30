@@ -7,13 +7,6 @@ const CATEGORIES = [
   { id: 'lainnya', label: 'Lainnya' },
 ]
 
-const RSVP_OPTIONS = [
-  { id: 'belum_respon', label: 'Belum respon' },
-  { id: 'hadir', label: 'Hadir' },
-  { id: 'tidak_hadir', label: 'Tidak hadir' },
-  { id: 'ragu', label: 'Ragu' },
-]
-
 export default function GuestForm({
   initial,
   saving,
@@ -27,12 +20,6 @@ export default function GuestForm({
 
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value })
   const setVal = (k, v) => setF({ ...f, [k]: v })
-
-  const changePax = (delta) => {
-    const cur = parseInt(f.pax, 10) || 1
-    const next = Math.max(1, Math.min(99, cur + delta))
-    setVal('pax', next)
-  }
 
   return (
     <form
@@ -97,66 +84,17 @@ export default function GuestForm({
         </div>
       </div>
 
-      {/* Jumlah Pax Stepper & RSVP Status */}
-      <div className="grid grid-cols-2 gap-3">
-        {/* Pax Stepper */}
-        <div>
-          <label className="block text-[13px] font-medium text-text-primary mb-1.5">
-            Jumlah Pax
-          </label>
-          <div className="flex items-center h-[52px] rounded-input border border-border bg-white px-2 justify-between">
-            <button
-              type="button"
-              onClick={() => changePax(-1)}
-              className="w-9 h-9 rounded-lg bg-surface-muted flex items-center justify-center text-text-secondary hover:text-text-primary active:scale-90 transition-all font-bold text-lg"
-              aria-label="Kurangi pax"
-            >
-              -
-            </button>
-            <span className="font-semibold text-[15px] text-text-primary">
-              {f.pax || 1}
-            </span>
-            <button
-              type="button"
-              onClick={() => changePax(1)}
-              className="w-9 h-9 rounded-lg bg-surface-muted flex items-center justify-center text-text-secondary hover:text-text-primary active:scale-90 transition-all font-bold text-lg"
-              aria-label="Tambah pax"
-            >
-              +
-            </button>
-          </div>
-        </div>
-
-        {/* RSVP Status */}
-        <div>
-          <label className="block text-[13px] font-medium text-text-primary mb-1.5">
-            Status RSVP
-          </label>
-          <select
-            className="w-full h-[52px] rounded-input border border-border bg-white px-3 text-[14px] text-text-primary outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/15"
-            value={f.rsvp_status || 'belum_respon'}
-            onChange={set('rsvp_status')}
-          >
-            {RSVP_OPTIONS.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.label}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      {/* Catatan */}
+      {/* Catatan Internal */}
       <div>
         <label className="block text-[13px] font-medium text-text-primary mb-1.5">
-          Catatan
+          Catatan Internal (Opsional)
         </label>
         <textarea
           rows={2}
           className="w-full rounded-input border border-border bg-white p-3 text-[14px] text-text-primary placeholder:text-text-tertiary outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/15 resize-none"
           value={f.catatan || ''}
           onChange={set('catatan')}
-          placeholder="Opsional (misal: meja VIP, teman SMA)"
+          placeholder="Misal: Meja VIP, teman SMA, titip souvenir"
         />
       </div>
 
